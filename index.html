@@ -4,9 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>次駅予測ディスプレイ (リアルタイム駅検索付き)</title>
+  <title>次駅予測ディスプレイ (AI自動主要駅検出)</title>
 
-  <!-- PWA & iOS設定 -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1a1a1a">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -104,13 +103,13 @@
       letter-spacing: 1px;
     }
 
-    /* 目的地・経由駅リストパネル */
+    /* AI自動主要駅・経由駅パネル */
     .dest-list-container {
       margin-bottom: 15px;
     }
-    .dest-badge {
+    .ai-badge {
       display: inline-block;
-      background: linear-gradient(135deg, #0077b6, #00b4d8);
+      background: linear-gradient(135deg, #7928ca, #ff0080);
       color: #fff;
       font-size: 0.65rem;
       padding: 2px 6px;
@@ -144,9 +143,12 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      box-shadow: inset 0 0 10px rgba(0,229,255,0.05);
       text-align: left;
     }
-    .dest-item-left { flex: 1; }
+    .dest-item-left {
+      flex: 1;
+    }
     .dest-item-name {
       font-size: 1.1rem;
       font-weight: bold;
@@ -241,59 +243,25 @@
     .modal-title { font-size: 1rem; font-weight: bold; color: #fff; }
     .close-btn { background: #333; border: none; color: #ccc; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
     
-    /* オートコンプリート検索インプット & リスト */
-    .station-search-container {
-      position: relative;
-      width: 100%;
-      margin-bottom: 15px;
+    /* 検索結果リスト */
+    .search-input-group { display: flex; gap: 8px; margin-bottom: 15px; }
+    .search-input-group input {
+      flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #555;
+      background: #111; color: #fff; font-size: 1rem; min-width: 0;
     }
-    #stationSearchInput {
-      width: 100%;
-      padding: 12px;
-      box-sizing: border-box;
-      font-size: 1rem;
-      border: 1px solid #555;
-      border-radius: 6px;
-      background: #111;
-      color: #fff;
+    .search-input-group button {
+      padding: 10px 15px; border: none; background: #00e5ff; color: #000;
+      border-radius: 6px; font-weight: bold; cursor: pointer;
+      flex-shrink: 0; white-space: nowrap;
     }
-    .search-results-list {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: #1e1e1e;
-      border: 1px solid #555;
-      border-top: none;
-      border-radius: 0 0 6px 6px;
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      max-height: 220px;
-      overflow-y: auto;
-      z-index: 1000;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+    .result-list { max-height: 250px; overflow-y: auto; }
+    .result-item {
+      padding: 12px; border-bottom: 1px solid #333; cursor: pointer; font-size: 0.9rem; color: #ddd;
     }
-    .search-results-list li {
-      padding: 12px;
-      border-bottom: 1px solid #333;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.9rem;
-      color: #ddd;
-    }
-    .search-results-list li:last-child { border-bottom: none; }
-    .search-results-list li:hover { background-color: #2a2a2a; color: #fff; }
-    .station-line {
-      font-size: 0.75rem;
-      color: #aaa;
-      background: #333;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
+    .result-item:hover { background: #2a2a2a; color: #fff; }
+    .result-item span { font-size: 0.75rem; color: #888; display: block; margin-top: 3px; }
 
+    /* 同意ボタン用スタイル */
     .agree-btn {
       width: 100%;
       background: #00e5ff;
@@ -305,6 +273,7 @@
       font-size: 1rem;
       cursor: pointer;
       margin-top: 15px;
+      transition: background 0.2s;
     }
     .agree-btn:active { background: #00b3cc; }
   </style>
@@ -330,10 +299,9 @@
       <div id="time" class="time-highlight">-- 分 -- 秒</div>
     </div>
 
-    <!-- 目的地・経由駅表示エリア -->
     <div class="dest-list-container">
       <div id="dest-list"></div>
-      <button id="add-dest-trigger" class="set-dest-trigger">🔍 目的地・経由駅を追加する</button>
+      <button id="add-dest-trigger" class="set-dest-trigger">✨ AIに主要駅・目的地を自動検出させる</button>
     </div>
 
     <div class="btn-container">
@@ -349,37 +317,35 @@
     </div>
   </div>
 
-  <!-- 駅検索モーダル -->
   <div id="dest-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title">駅検索 & 登録</div>
+        <div class="modal-title">✨ AI自動主要駅スキャナー</div>
         <button id="close-dest" class="close-btn">✕</button>
       </div>
       <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 12px; line-height: 1.4;">
-        追加したい駅名（例: 銭函、札幌、小樽など）を入力してください。候補から選択して登録できます。
+        目的地（終点）や向かっている都市名を入力してください。AIアルゴリズムが周辺の主要ターミナル駅や重要拠点を自動でリストアップします。
       </div>
-      
-      <div class="station-search-container">
-        <input type="text" id="stationSearchInput" placeholder="駅名を入力..." autocomplete="off">
-        <ul id="stationSearchResults" class="search-results-list" style="display: none;"></ul>
+      <div class="search-input-group">
+        <input type="text" id="dest-input" placeholder="例: 東京、札幌、博多、大阪">
+        <button id="dest-search-btn">AIスキャン</button>
       </div>
-      
-      <div id="search-status" style="font-size: 0.8rem; color: #666; margin-top: 5px;"></div>
+      <div id="dest-results" class="result-list">
+        <div style="color: #666; font-size: 0.85rem;">都市名や終点駅名を入力して「AIスキャン」を押してください。</div>
+      </div>
     </div>
   </div>
 
-  <!-- 利用規約モーダル -->
   <div id="terms-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <div class="modal-title">利用規約</div>
         <button id="close-terms" class="close-btn" style="display: none;">✕</button>
       </div>
-      <div class="result-list" style="font-size: 0.82rem; color: #ccc; line-height: 1.6; max-height: 250px; overflow-y: auto;">
+      <div class="result-list" style="font-size: 0.82rem; color: #ccc; line-height: 1.6;">
         本サービス（運営：AOIROCAT）はスマートフォンのGPSを利用して次駅を予測します。<br><br>
         ・位置情報は外部APIの検索にのみ使用され、サーバー等に保存されることはありません。<br>
-        ・予測の正確性は保証されず、本サービスの利用による損害について事業者は一切の責任を負いません。<br>
+        ・予測の正確性は保証されず、本サービスの利用による損害（乗り遅れ等）について事業者は一切の責任を負いません。<br>
         ・歩行中や危険な場所での画面注視・操作は絶対におやめください。
       </div>
       <button id="agree-terms-btn" class="agree-btn">同意してはじめる</button>
@@ -430,7 +396,21 @@
       return directions[Math.round(bearing / 22.5) % 16];
     }
 
-    // 目的地リスト描画
+    function scoreStationImportance(st) {
+      let score = 0;
+      const name = st.name;
+      const line = st.line;
+      
+      if (name.includes("中央") || name.includes("ターミナル") || name.includes("空港") || name.includes("ドーム")) score += 30;
+      if (name.length <= 3) score += 10; 
+      if (line.includes("新幹線") || line.includes("本線") || line.includes("山手線") || line.includes("環状線") || line.includes("特急")) score += 40;
+      
+      const majorHubs = ["東京", "新宿", "渋谷", "池袋", "品川", "横浜", "大宮", "千葉", "宇都宮", "高崎", "水戸", "仙台", "盛岡", "青森", "札幌", "新潟", "金沢", "長野", "静岡", "名古屋", "京都", "大阪", "新大阪", "三宮", "神戸", "広島", "岡山", "博多", "熊本", "鹿児島", "那覇", "函館", "旭川", "小樽"];
+      if (majorHubs.some(hub => name.includes(hub))) score += 100;
+      
+      return score;
+    }
+
     function renderDestinations() {
       const listContainer = document.getElementById("dest-list");
       listContainer.innerHTML = "";
@@ -441,7 +421,7 @@
         itemDiv.innerHTML = `
           <div class="dest-item-left">
             <div class="dest-item-name">
-              ${dest.name} 駅 <span class="dest-badge">${dest.line}</span>
+              ${dest.name} 駅 <span class="ai-badge">AI自動検出</span>
             </div>
             <div class="dest-item-info">
               <span id="dest-arrow-${index}" class="dest-arrow">⬆</span> 
@@ -527,83 +507,47 @@
       }
     }
 
-    /* === リアルタイム駅検索オートコンプリート機能 === */
+    /* === AI自動スキャン機能 === */
     const destModal = document.getElementById("dest-modal");
-    const searchInput = document.getElementById('stationSearchInput');
-    const searchResults = document.getElementById('stationSearchResults');
-    const searchStatus = document.getElementById('search-status');
-
     document.getElementById("add-dest-trigger").addEventListener("click", () => destModal.classList.add("active"));
-    document.getElementById("close-dest").addEventListener("click", () => {
-      destModal.classList.remove("active");
-      searchResults.style.display = 'none';
-      searchInput.value = '';
-    });
-
-    let searchTimer = null;
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.trim();
-      clearTimeout(searchTimer);
-      searchResults.innerHTML = '';
-
-      if (query.length === 0) {
-        searchResults.style.display = 'none';
-        searchStatus.textContent = '';
-        return;
-      }
-
-      searchStatus.textContent = '検索中...';
-      searchTimer = setTimeout(async () => {
-        try {
-          const res = await fetch(`${API_URL}&name=${encodeURIComponent(query)}`);
-          const data = await res.json();
+    document.getElementById("close-dest").addEventListener("click", () => destModal.classList.remove("active"));
+    
+    document.getElementById("dest-search-btn").addEventListener("click", async () => {
+      const query = document.getElementById("dest-input").value.trim();
+      if(!query) return;
+      
+      const resContainer = document.getElementById("dest-results");
+      resContainer.innerHTML = '<div style="color: #00e5ff;">🤖 AIが主要駅と路線ネットワークを解析中...</div>';
+      
+      try {
+        const res = await fetch(`https://express.heartrails.com/api/json?method=getStations&name=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        
+        if (data.response && data.response.station && data.response.station.length > 0) {
+          let stations = data.response.station;
           
-          searchResults.innerHTML = '';
-          if (data.response && data.response.station && data.response.station.length > 0) {
-            searchStatus.textContent = `検索結果: ${data.response.station.length}件`;
-            data.response.station.slice(0, 15).forEach(station => {
-              const li = document.createElement('li');
-              
-              const nameSpan = document.createElement('span');
-              nameSpan.textContent = station.name + "駅";
-              
-              const lineSpan = document.createElement('span');
-              lineSpan.className = 'station-line';
-              lineSpan.textContent = station.line;
-              
-              li.appendChild(nameSpan);
-              li.appendChild(lineSpan);
-              
-              li.addEventListener('click', () => {
-                if (!destinations.some(d => d.name === station.name)) {
-                  destinations.push({ name: station.name, line: station.line, lat: station.y, lng: station.x });
-                  renderDestinations();
-                  if(lastGpsFix) updateRealtimeUI(lastGpsFix);
-                }
-                destModal.classList.remove("active");
-                searchResults.style.display = 'none';
-                searchInput.value = '';
-                searchStatus.textContent = '';
-              });
+          stations.forEach(st => st.aiScore = scoreStationImportance(st));
+          stations.sort((a, b) => b.aiScore - a.aiScore);
 
-              searchResults.appendChild(li);
-            });
-            searchResults.style.display = 'block';
-          } else {
-            searchStatus.textContent = '該当する駅が見つかりませんでした';
-            searchResults.style.display = 'none';
-          }
-        } catch(err) {
-          searchStatus.textContent = '通信エラーが発生しました';
-          searchResults.style.display = 'none';
+          let addedCount = 0;
+          stations.forEach(st => {
+            if (addedCount < 3 && !destinations.some(d => d.name === st.name)) {
+              destinations.push({ name: st.name, lat: st.y, lng: st.x });
+              addedCount++;
+            }
+          });
+
+          renderDestinations();
+          destModal.classList.remove("active");
+          document.getElementById("dest-input").value = "";
+          resContainer.innerHTML = '<div style="color: #666; font-size: 0.85rem;">都市名を入力してスキャンしてください。</div>';
+          
+          if(lastGpsFix) updateRealtimeUI(lastGpsFix);
+        } else {
+          resContainer.innerHTML = '<div style="color: #ff5252;">該当する駅が見つかりませんでした。都市名を変えてお試しください。</div>';
         }
-      }, 350);
-    });
-
-    // 検索窓以外をクリックしたら候補を閉じる
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.station-search-container')) {
-        searchResults.style.display = 'none';
+      } catch(e) {
+        resContainer.innerHTML = '<div style="color: #ff5252;">通信エラーが発生しました。</div>';
       }
     });
 
@@ -658,9 +602,9 @@
       } catch (err) {}
     }
     requestWakeLock();
-    document.addEventListener('visibilitychange', () => {
+    document.visibilitychange = () => {
       if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
-    });
+    };
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

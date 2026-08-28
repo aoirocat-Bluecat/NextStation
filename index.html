@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>次駅予測ディスプレイ (目的地距離計付き)</title>
+
+  <!-- PWA & iOS設定 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="次駅予測">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #0a0a0a;
+      color: #fff;
+    }
+    .display {
+      background: #1a1a1a;
+      border: 2px solid #333;
+      border-radius: 16px;
+      padding: 25px;
+      text-align: center;
+      width: 85%;
+      max-width: 450px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      position: relative;
+    }
+    .sub-title {
+      font-size: 0.85rem;
+      color: #888;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .status-indicator {
+      color: #ff9800;
+      font-weight: bold;
+    }
+    .direction-container {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #222;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      border: 1px solid #444;
+    }
+    .compass-arrow, .dest-arrow {
+      font-size: 1.1rem;
+      color: #00e5ff;
+      transition: transform 0.3s ease-out;
+      transform: rotate(0deg);
+      display: inline-block;
+    }
+    .compass-text {
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #ccc;
+    }
+    .line-name {
+      font-size: 1.05rem;
+      color: #00e5ff;
+      margin-bottom: 3px;
+    }
+    .station-name {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #00ff66;
+      margin-bottom: 15px;
+      word-break: break-all;
+    }
+    .arrival-panel {
+      background: #2a2a2a;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 1px solid #444;
+    }
+    .info-row {
+      font-size: 0.95rem;
+      color: #ddd;
+    }
+    .time-highlight {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #ffeb3b;
+      letter-spacing: 1px;
+    }
+
+    /* 目的地（青看板風）パネルのスタイル */
+    .set-dest-trigger {
+      width: 100%;
+      background: transparent;
+      border: 1px dashed #555;
+      color: #888;
+      padding: 12px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .set-dest-trigger:hover {
+      border-color: #00e5ff;
+      color: #00e5ff;
+      background: rgba(0, 229, 255, 0.05);
+    }
+    .destination-panel {
+      display: none;
+      background: linear-gradient(135deg, #0d1b2a, #1b263b);
+      border: 1px solid #415a77;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      text-align: left;
+      box-shadow: inset 0 0 10px rgba(0,229,255,0.05);
+    }
+    .dest-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .dest-label {
+      font-size: 0.75rem;
+      color: #778da9;
+      letter-spacing: 1px;
+      font-weight: bold;
+    }
+    .dest-change-btn {
+      background: transparent;
+      border: 1px solid #778da9;
+      color: #778da9;
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .dest-change-btn:hover {
+      background: #778da9;
+      color: #fff;
+    }
+    .dest-name {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #e0e1dd;
+      margin-bottom: 8px;
+    }
+    .dest-info {
+      font-size: 0.95rem;
+      color: #a3b18a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dest-dist-value {
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #00e5ff;
+      letter-spacing: 1px;
+    }
+    
+    /* ボタンエリア */
+    .btn-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .control-btn {
+      flex: 1;
+      background: #222;
+      color: #ddd;
+      border: 1px solid #555;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .control-btn.skip { color: #ff5252; border-color: #ff5252; }
+    .control-btn:active { background: #444; }
+    .control-btn.skip:active { background: #ff5252; color: #fff; }
+
+    .debug-info { font-size: 0.75rem; color: #666; margin-top: 10px; }
+    .credit { margin-top: 12px; font-size: 0.7rem; color: #555; }
+    .credit a, .terms-trigger { color: #888; text-decoration: none; cursor: pointer; }
+    .credit a:hover, .terms-trigger:hover { text-decoration: underline; }
+
+    /* モーダル共通スタイル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-content {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      border-radius: 12px;
+      width: 90%; max-width: 400px; max-height: 80vh;
+      padding: 20px; box-sizing: border-box;
+      display: flex; flex-direction: column; text-align: left;
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;
+    }
+    .modal-title { font-size: 1rem; font-weight: bold; color: #fff; }
+    .close-btn { background: #333; border: none; color: #ccc; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+    
+    /* 検索結果リスト */
+    .search-input-group { display: flex; gap: 8px; margin-bottom: 15px; }
+    .search-input-group input {
+      flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #555;
+      background: #111; color: #fff; font-size: 1rem; min-width: 0;
+    }
+    .search-input-group button {
+      padding: 10px 15px; border: none; background: #00e5ff; color: #000;
+      border-radius: 6px; font-weight: bold; cursor: pointer;
+      flex-shrink: 0; white-space: nowrap; /* ボタン見切れ防止 */
+    }
+    .result-list { max-height: 250px; overflow-y: auto; }
+    .result-item {
+      padding: 12px; border-bottom: 1px solid #333; cursor: pointer; font-size: 0.9rem; color: #ddd;
+    }
+    .result-item:hover { background: #2a2a2a; color: #fff; }
+    .result-item span { font-size: 0.75rem; color: #888; display: block; margin-top: 3px; }
+
+    /* 同意ボタン用スタイル */
+    .agree-btn {
+      width: 100%;
+      background: #00e5ff;
+      color: #000;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: background 0.2s;
+    }
+    .agree-btn:active { background: #00b3cc; }
+  </style>
+</head>
+<body>
+
+  <div class="display">
+    <div class="sub-title">
+      <span>NEXT STATION</span>
+      <span id="status" class="status-indicator">測位中...</span>
+    </div>
+
+    <div class="direction-container">
+      <div id="compass-arrow" class="compass-arrow">⬆</div>
+      <div id="compass-text" class="compass-text">方角を計測中</div>
+    </div>
+
+    <div id="line" class="line-name">---</div>
+    <div id="station" class="station-name">位置情報を取得中</div>
+    
+    <div class="arrival-panel">
+      <div id="distance" class="info-row">直線距離: --- m</div>
+      <div id="time" class="time-highlight">-- 分 -- 秒</div>
+    </div>
+
+    <!-- 目的地設定トリガー -->
+    <button id="set-dest-trigger" class="set-dest-trigger">➕ 終点・目的地（大都市等）を設定する</button>
+
+    <!-- 目的地表示パネル -->
+    <div id="destination-panel" class="destination-panel">
+      <div class="dest-header">
+        <span class="dest-label">方面・目的地</span>
+        <button id="change-dest-btn" class="dest-change-btn">変更</button>
+      </div>
+      <div id="dest-name" class="dest-name">--- 駅</div>
+      <div class="dest-info">
+        <span id="dest-arrow" class="dest-arrow">⬆</span> 
+        <span>あと <span id="dest-distance" class="dest-dist-value">--- km</span></span>
+      </div>
+    </div>
+
+    <div class="btn-container">
+      <button id="back-btn" class="control-btn">⬅️ 前の駅へ戻る</button>
+      <button id="skip-btn" class="control-btn skip">駅をスキップ ⏭</button>
+    </div>
+    
+    <div id="debug" class="debug-info">速度: -- km/h | 予測ピン: -- m先</div>
+
+    <div class="credit">
+      Powered by <a href="http://express.heartrails.com/" target="_blank">HeartRails Express</a>
+      | <span id="open-terms" class="terms-trigger">利用規約</span>
+    </div>
+  </div>
+
+  <!-- 目的地検索モーダル -->
+  <div id="dest-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">目的地駅の検索</div>
+        <button id="close-dest" class="close-btn">✕</button>
+      </div>
+      <div class="search-input-group">
+        <input type="text" id="dest-input" placeholder="例: 札幌、東京、博多">
+        <button id="dest-search-btn">検索</button>
+      </div>
+      <div id="dest-results" class="result-list">
+        <div style="color: #666; font-size: 0.85rem;">駅名を入力して検索してください。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 利用規約モーダル (初回アクセス時表示対応) -->
+  <div id="terms-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">利用規約</div>
+        <button id="close-terms" class="close-btn" style="display: none;">✕</button>
+      </div>
+      <div class="result-list" style="font-size: 0.82rem; color: #ccc; line-height: 1.6;">
+        本サービス（運営：AOIROCAT）はスマートフォンのGPSを利用して次駅を予測します。<br><br>
+        ・位置情報は外部APIの検索にのみ使用され、サーバー等に保存されることはありません。<br>
+        ・予測の正確性は保証されず、本サービスの利用による損害（乗り遅れ等）について事業者は一切の責任を負いません。<br>
+        ・歩行中や危険な場所での画面注視・操作は絶対におやめください。
+      </div>
+      <button id="agree-terms-btn" class="agree-btn">同意してはじめる</button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "https://express.heartrails.com/api/json?method=getStations";
+    const EARTH_RADIUS = 6371e3; 
+    const PREDICT_SECONDS = 45;  
+
+    let lastGpsFix = null;       
+    let lastApiCallPin = null;   
+    let targetStation = null;    
+    let currentSpeed = 0;        
+    let currentBearing = 0;      
+    
+    let skippedStations = new Set();
+    let stationHistory = [];
+    let destinationData = null;
+
+    const toRadians = (deg) => deg * (Math.PI / 180);
+    const toDegrees = (rad) => rad * (180 / Math.PI);
+
+    function calculateDistance(lat1, lng1, lat2, lng2) {
+      const φ1 = toRadians(lat1), φ2 = toRadians(lat2);
+      const Δφ = toRadians(lat2 - lat1), Δλ = toRadians(lng2 - lng1);
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      return EARTH_RADIUS * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    function calculateBearing(lat1, lng1, lat2, lng2) {
+      const φ1 = toRadians(lat1), φ2 = toRadians(lat2), Δλ = toRadians(lng2 - lng1);
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+      return (toDegrees(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    function calculateVirtualDestination(lat, lng, bearing, distance) {
+      const φ1 = toRadians(lat), λ1 = toRadians(lng), θ = toRadians(bearing), δ = distance / EARTH_RADIUS;
+      const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+      const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+      return { lat: toDegrees(φ2), lng: toDegrees(λ2) };
+    }
+
+    function getCompassDirectionText(bearing) {
+      const directions = ["北", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西"];
+      return directions[Math.round(bearing / 22.5) % 16];
+    }
+
+    function updateRealtimeUI(currentFix) {
+      // 1. 次駅の更新
+      if (targetStation) {
+        const actualDistance = calculateDistance(currentFix.lat, currentFix.lng, targetStation.lat, targetStation.lng);
+        const distStr = actualDistance >= 1000 ? (actualDistance / 1000).toFixed(2) + " km" : Math.round(actualDistance) + " m";
+        document.getElementById("distance").innerText = `残り: ${distStr}`;
+
+        if (currentSpeed > 1.38) { 
+          const remainSeconds = Math.round(actualDistance / currentSpeed);
+          const mins = Math.floor(remainSeconds / 60);
+          document.getElementById("time").innerText = mins > 0 ? `約 ${mins} 分 ${remainSeconds % 60} 秒` : `約 ${remainSeconds % 60} 秒`;
+        } else {
+          document.getElementById("time").innerText = "停車中 / 速度計測中";
+        }
+      }
+
+      // 2. 目的地の更新
+      if (destinationData) {
+        const destDist = calculateDistance(currentFix.lat, currentFix.lng, destinationData.lat, destinationData.lng);
+        const destDistStr = destDist >= 10000 ? (destDist / 1000).toFixed(0) : (destDist / 1000).toFixed(1);
+        document.getElementById("dest-distance").innerText = destDistStr;
+        
+        const destBearing = calculateBearing(currentFix.lat, currentFix.lng, destinationData.lat, destinationData.lng);
+        document.getElementById("dest-arrow").style.transform = `rotate(${destBearing}deg)`;
+      }
+    }
+
+    function setTargetStation(newStation) {
+      if (targetStation && targetStation.name !== newStation.name) {
+        stationHistory.push(targetStation);
+        if (stationHistory.length > 10) stationHistory.shift();
+      }
+      targetStation = newStation;
+      document.getElementById("line").innerText = targetStation.line;
+      document.getElementById("station").innerText = targetStation.name + " 駅";
+    }
+
+    async function fetchStationAndDisplay(currentFix, virtualPin) {
+      try {
+        const response = await fetch(`${API_URL}&x=${virtualPin.lng}&y=${virtualPin.lat}`);
+        const data = await response.json();
+        
+        if (data.response && data.response.station && data.response.station.length > 0) {
+          const stations = data.response.station;
+          let selectedStation = stations.find(st => !skippedStations.has(st.name));
+          
+          if (currentSpeed >= 1.38) {
+            let validStations = stations.filter(st => {
+              if (skippedStations.has(st.name)) return false;
+              const angleDiff = Math.abs(currentBearing - calculateBearing(currentFix.lat, currentFix.lng, st.y, st.x));
+              return (angleDiff > 180 ? 360 - angleDiff : angleDiff) <= 70;
+            });
+            if (validStations.length > 0) selectedStation = validStations[0];
+          }
+
+          if(selectedStation) {
+            setTargetStation({ name: selectedStation.name, line: selectedStation.line, lat: selectedStation.y, lng: selectedStation.x });
+            updateRealtimeUI(currentFix);
+          }
+        }
+      } catch (e) {
+        document.getElementById("station").innerText = "取得エラー";
+      }
+    }
+
+    /* === 目的地設定の処理 === */
+    const destModal = document.getElementById("dest-modal");
+    document.getElementById("set-dest-trigger").addEventListener("click", () => destModal.classList.add("active"));
+    document.getElementById("change-dest-btn").addEventListener("click", () => destModal.classList.add("active"));
+    document.getElementById("close-dest").addEventListener("click", () => destModal.classList.remove("active"));
+    
+    document.getElementById("dest-search-btn").addEventListener("click", async () => {
+      const query = document.getElementById("dest-input").value.trim();
+      if(!query) return;
+      
+      const resContainer = document.getElementById("dest-results");
+      resContainer.innerHTML = '<div style="color: #00e5ff;">検索中...</div>';
+      
+      try {
+        const res = await fetch(`https://express.heartrails.com/api/json?method=getStations&name=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        
+        if (data.response && data.response.station && data.response.station.length > 0) {
+          resContainer.innerHTML = "";
+          data.response.station.forEach(st => {
+            const div = document.createElement("div");
+            div.className = "result-item";
+            div.innerHTML = `${st.name} 駅 <span>${st.line} (${st.prefecture})</span>`;
+            div.onclick = () => {
+              destinationData = { name: st.name, lat: st.y, lng: st.x };
+              document.getElementById("dest-name").innerText = st.name + " 駅";
+              
+              document.getElementById("set-dest-trigger").style.display = "none";
+              document.getElementById("destination-panel").style.display = "block";
+              destModal.classList.remove("active");
+              
+              if(lastGpsFix) updateRealtimeUI(lastGpsFix);
+            };
+            resContainer.appendChild(div);
+          });
+        } else {
+          resContainer.innerHTML = '<div style="color: #ff5252;">見つかりませんでした。駅名を正確に入力してください。</div>';
+        }
+      } catch(e) {
+        resContainer.innerHTML = '<div style="color: #ff5252;">通信エラーが発生しました。</div>';
+      }
+    });
+
+    /* === 既存UI操作 === */
+    document.getElementById("skip-btn").addEventListener("click", () => {
+      if (targetStation && lastGpsFix) {
+        skippedStations.add(targetStation.name);
+        const forcedPin = calculateVirtualDestination(lastGpsFix.lat, lastGpsFix.lng, currentBearing, Math.max(currentSpeed * PREDICT_SECONDS, 150));
+        lastApiCallPin = forcedPin;
+        document.getElementById("station").innerText = "検索中...";
+        fetchStationAndDisplay(lastGpsFix, forcedPin);
+      }
+    });
+
+    document.getElementById("back-btn").addEventListener("click", () => {
+      if (stationHistory.length > 0) {
+        const prevStation = stationHistory.pop();
+        skippedStations.delete(prevStation.name);
+        targetStation = prevStation;
+        document.getElementById("line").innerText = targetStation.line;
+        document.getElementById("station").innerText = targetStation.name + " 駅";
+        if (lastGpsFix) updateRealtimeUI(lastGpsFix);
+      } else { alert("履歴がありません"); }
+    });
+
+    /* === 利用規約モーダル (localStorage対応) === */
+    const termsModal = document.getElementById("terms-modal");
+    const closeTermsBtn = document.getElementById("close-terms");
+    const agreeTermsBtn = document.getElementById("agree-terms-btn");
+
+    // 初回アクセス（同意していない）場合の表示
+    if (!localStorage.getItem("tos_agreed")) {
+      termsModal.classList.add("active");
+      closeTermsBtn.style.display = "none";  // 初回は×ボタンを隠す
+      agreeTermsBtn.style.display = "block"; // 同意ボタンを表示
+    }
+
+    // 「同意してはじめる」ボタンを押した時の処理
+    agreeTermsBtn.addEventListener("click", () => {
+      localStorage.setItem("tos_agreed", "true"); // 同意したことをブラウザに記録
+      termsModal.classList.remove("active");
+    });
+
+    // フッターの「利用規約」リンクから開いた場合の処理（既に同意済みの人が見る場合）
+    document.getElementById("open-terms").addEventListener("click", () => {
+      termsModal.classList.add("active");
+      closeTermsBtn.style.display = "block"; // ×ボタンを表示
+      agreeTermsBtn.style.display = "none";  // 同意ボタンは不要なので隠す
+    });
+
+    // ×ボタンで閉じる
+    closeTermsBtn.addEventListener("click", () => {
+      termsModal.classList.remove("active");
+    });
+    
+    /* === スリープ防止 & PWA === */
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.log(`Wake Lock Error: ${err.message}`);
+      }
+    }
+    requestWakeLock();
+    document.addEventListener('visibilitychange', () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    });
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.error('SW登録失敗:', err);
+        });
+      });
+    }
+
+    /* === GPS監視 === */
+    function handlePositionSuccess(position) {
+      const currentFix = { lat: position.coords.latitude, lng: position.coords.longitude, timestamp: position.timestamp || Date.now() };
+
+      if (!lastGpsFix) {
+        lastGpsFix = lastApiCallPin = currentFix;
+        document.getElementById("status").innerText = "現在地検索";
+        fetchStationAndDisplay(currentFix, currentFix);
+        return;
+      }
+
+      const timeElapsed = (currentFix.timestamp - lastGpsFix.timestamp) / 1000;
+      const distanceMoved = calculateDistance(lastGpsFix.lat, lastGpsFix.lng, currentFix.lat, currentFix.lng);
+
+      if (distanceMoved < 10) {
+        if (timeElapsed > 5) { currentSpeed = 0; document.getElementById("compass-text").innerText = "停車中"; }
+        lastGpsFix = currentFix;
+        updateRealtimeUI(currentFix);
+        return; 
+      }
+
+      currentSpeed = distanceMoved / timeElapsed;
+      currentBearing = calculateBearing(lastGpsFix.lat, lastGpsFix.lng, currentFix.lat, currentFix.lng);
+
+      document.getElementById("compass-text").innerText = `${getCompassDirectionText(currentBearing)} へ移動中`;
+      document.getElementById("compass-arrow").style.transform = `rotate(${currentBearing}deg)`;
+      
+      const speedKmH = currentSpeed * 3.6;
+      let virtualPin = currentFix;
+      if (speedKmH > 10) {
+        virtualPin = calculateVirtualDestination(currentFix.lat, currentFix.lng, currentBearing, currentSpeed * PREDICT_SECONDS);
+        document.getElementById("status").innerText = "先読み予測中"; document.getElementById("status").style.color = "#00ff66";
+      } else {
+        document.getElementById("status").innerText = "低速/現在地"; document.getElementById("status").style.color = "#ff9800";
+      }
+
+      document.getElementById("debug").innerText = `速度: ${speedKmH.toFixed(1)} km/h | 予測ピン: ${(currentSpeed * PREDICT_SECONDS).toFixed(0)} m先`;
+      lastGpsFix = currentFix;
+
+      if (calculateDistance(lastApiCallPin.lat, lastApiCallPin.lng, virtualPin.lat, virtualPin.lng) > 150) {
+        lastApiCallPin = virtualPin;
+        fetchStationAndDisplay(currentFix, virtualPin);
+      } else {
+        updateRealtimeUI(currentFix);
+      }
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(handlePositionSuccess, 
+        () => document.getElementById("station").innerText = "位置情報エラー",
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      );
+    }
+  </script>
+</body>
+</html>

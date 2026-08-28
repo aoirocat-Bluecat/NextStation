@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>次駅予測ディスプレイ (目的地距離計付き)</title>
+  <title>次駅予測ディスプレイ (AI自動主要駅検出)</title>
 
   <!-- PWA & iOS設定 -->
   <link rel="manifest" href="manifest.json">
@@ -58,7 +58,7 @@
       margin-bottom: 12px;
       border: 1px solid #444;
     }
-    .compass-arrow, .dest-arrow {
+    .compass-arrow {
       font-size: 1.1rem;
       color: #00e5ff;
       transition: transform 0.3s ease-out;
@@ -103,7 +103,21 @@
       letter-spacing: 1px;
     }
 
-    /* 目的地（青看板風）パネルのスタイル */
+    /* AI自動主要駅・経由駅パネル */
+    .dest-list-container {
+      margin-bottom: 15px;
+    }
+    .ai-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #7928ca, #ff0080);
+      color: #fff;
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
     .set-dest-trigger {
       width: 100%;
       background: transparent;
@@ -111,7 +125,6 @@
       color: #888;
       padding: 12px;
       border-radius: 12px;
-      margin-bottom: 15px;
       cursor: pointer;
       font-size: 0.85rem;
       transition: all 0.2s;
@@ -121,59 +134,60 @@
       color: #00e5ff;
       background: rgba(0, 229, 255, 0.05);
     }
-    .destination-panel {
-      display: none;
-      background: linear-gradient(135deg, #0d1b2a, #1b263b);
-      border: 1px solid #415a77;
-      border-radius: 12px;
-      padding: 15px;
-      margin-bottom: 15px;
-      text-align: left;
-      box-shadow: inset 0 0 10px rgba(0,229,255,0.05);
-    }
-    .dest-header {
+    .dest-item {
+      background: linear-gradient(135deg, #101c2c, #1f2a44);
+      border: 1px solid #3a506b;
+      border-radius: 10px;
+      padding: 12px 15px;
+      margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      box-shadow: inset 0 0 10px rgba(0,229,255,0.05);
+      text-align: left;
     }
-    .dest-label {
-      font-size: 0.75rem;
-      color: #778da9;
-      letter-spacing: 1px;
-      font-weight: bold;
+    .dest-item-left {
+      flex: 1;
     }
-    .dest-change-btn {
-      background: transparent;
-      border: 1px solid #778da9;
-      color: #778da9;
-      font-size: 0.7rem;
-      padding: 3px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .dest-change-btn:hover {
-      background: #778da9;
-      color: #fff;
-    }
-    .dest-name {
-      font-size: 1.4rem;
+    .dest-item-name {
+      font-size: 1.1rem;
       font-weight: bold;
       color: #e0e1dd;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
     }
-    .dest-info {
-      font-size: 0.95rem;
+    .dest-item-info {
+      font-size: 0.85rem;
       color: #a3b18a;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
-    .dest-dist-value {
-      font-size: 1.3rem;
+    .dest-item-dist {
+      font-size: 1.1rem;
       font-weight: bold;
       color: #00e5ff;
-      letter-spacing: 1px;
+    }
+    .dest-arrow {
+      color: #00e5ff;
+      display: inline-block;
+      transition: transform 0.3s ease-out;
+    }
+    .dest-remove-btn {
+      background: transparent;
+      border: 1px solid #555;
+      color: #888;
+      font-size: 0.7rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+    .dest-remove-btn:hover {
+      background: #ff5252;
+      color: #fff;
+      border-color: #ff5252;
     }
     
     /* ボタンエリア */
@@ -238,7 +252,7 @@
     .search-input-group button {
       padding: 10px 15px; border: none; background: #00e5ff; color: #000;
       border-radius: 6px; font-weight: bold; cursor: pointer;
-      flex-shrink: 0; white-space: nowrap; /* ボタン見切れ防止 */
+      flex-shrink: 0; white-space: nowrap;
     }
     .result-list { max-height: 250px; overflow-y: auto; }
     .result-item {
@@ -285,20 +299,10 @@
       <div id="time" class="time-highlight">-- 分 -- 秒</div>
     </div>
 
-    <!-- 目的地設定トリガー -->
-    <button id="set-dest-trigger" class="set-dest-trigger">➕ 終点・目的地（大都市等）を設定する</button>
-
-    <!-- 目的地表示パネル -->
-    <div id="destination-panel" class="destination-panel">
-      <div class="dest-header">
-        <span class="dest-label">方面・目的地</span>
-        <button id="change-dest-btn" class="dest-change-btn">変更</button>
-      </div>
-      <div id="dest-name" class="dest-name">--- 駅</div>
-      <div class="dest-info">
-        <span id="dest-arrow" class="dest-arrow">⬆</span> 
-        <span>あと <span id="dest-distance" class="dest-dist-value">--- km</span></span>
-      </div>
+    <!-- AI自動主要駅・経由駅エリア -->
+    <div class="dest-list-container">
+      <div id="dest-list"></div>
+      <button id="add-dest-trigger" class="set-dest-trigger">✨ AIに主要駅・目的地を自動検出させる</button>
     </div>
 
     <div class="btn-container">
@@ -314,24 +318,27 @@
     </div>
   </div>
 
-  <!-- 目的地検索モーダル -->
+  <!-- AI自動検出・目的地検索モーダル -->
   <div id="dest-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title">目的地駅の検索</div>
+        <div class="modal-title">✨ AI自動主要駅スキャナー</div>
         <button id="close-dest" class="close-btn">✕</button>
       </div>
+      <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 12px; line-height: 1.4;">
+        目的地（終点）や向かっている都市名を入力してください。AIアルゴリズムが周辺の主要ターミナル駅や重要拠点を自動でリストアップします。
+      </div>
       <div class="search-input-group">
-        <input type="text" id="dest-input" placeholder="例: 札幌、東京、博多">
-        <button id="dest-search-btn">検索</button>
+        <input type="text" id="dest-input" placeholder="例: 東京、札幌、博多、大阪">
+        <button id="dest-search-btn">AIスキャン</button>
       </div>
       <div id="dest-results" class="result-list">
-        <div style="color: #666; font-size: 0.85rem;">駅名を入力して検索してください。</div>
+        <div style="color: #666; font-size: 0.85rem;">都市名や終点駅名を入力して「AIスキャン」を押してください。</div>
       </div>
     </div>
   </div>
 
-  <!-- 利用規約モーダル (初回アクセス時表示対応) -->
+  <!-- 利用規約モーダル -->
   <div id="terms-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -361,7 +368,8 @@
     
     let skippedStations = new Set();
     let stationHistory = [];
-    let destinationData = null;
+    
+    let destinations = [];
 
     const toRadians = (deg) => deg * (Math.PI / 180);
     const toDegrees = (rad) => rad * (180 / Math.PI);
@@ -392,8 +400,56 @@
       return directions[Math.round(bearing / 22.5) % 16];
     }
 
+    // AI判定ルール：駅名や路線名、名詞から「主要駅・ジャンクション・県庁所在地クラス」を自動スコアリング
+    function scoreStationImportance(st) {
+      let score = 0;
+      const name = st.name;
+      const line = st.line;
+      
+      if (name.includes("中央") || name.includes("ターミナル") || name.includes("空港") || name.includes("ドーム")) score += 30;
+      if (name.length <= 3) score += 10; 
+      
+      if (line.includes("新幹線") || line.includes("本線") || line.includes("山手線") || line.includes("環状線") || line.includes("特急")) score += 40;
+      
+      const majorHubs = ["東京", "新宿", "渋谷", "池袋", "品川", "横浜", "大宮", "千葉", "宇都宮", "高崎", "水戸", "仙台", "盛岡", "青森", "札幌", "新潟", "金沢", "長野", "静岡", "名古屋", "京都", "大阪", "新大阪", "三宮", "神戸", "広島", "岡山", "博多", "熊本", "鹿児島", "那覇", "函館", "旭川", "小樽"];
+      if (majorHubs.some(hub => name.includes(hub))) score += 100;
+      
+      return score;
+    }
+
+    // リスト描画
+    function renderDestinations() {
+      const listContainer = document.getElementById("dest-list");
+      listContainer.innerHTML = "";
+
+      destinations.forEach((dest, index) => {
+        const itemDiv = document.createElement("div");
+        itemDiv.className = "dest-item";
+        itemDiv.innerHTML = `
+          <div class="dest-item-left">
+            <div class="dest-item-name">
+              ${dest.name} 駅 <span class="ai-badge">AI自動検出</span>
+            </div>
+            <div class="dest-item-info">
+              <span id="dest-arrow-${index}" class="dest-arrow">⬆</span> 
+              <span>あと <span id="dest-dist-${index}" class="dest-item-dist">---</span></span>
+            </div>
+          </div>
+          <button class="dest-remove-btn" onclick="removeDestination(${index})">削除</button>
+        `;
+        listContainer.appendChild(itemDiv);
+      });
+      
+      document.getElementById("add-dest-trigger").style.display = destinations.length >= 5 ? "none" : "block";
+    }
+
+    window.removeDestination = function(index) {
+      destinations.splice(index, 1);
+      renderDestinations();
+      if(lastGpsFix) updateRealtimeUI(lastGpsFix);
+    };
+
     function updateRealtimeUI(currentFix) {
-      // 1. 次駅の更新
       if (targetStation) {
         const actualDistance = calculateDistance(currentFix.lat, currentFix.lng, targetStation.lat, targetStation.lng);
         const distStr = actualDistance >= 1000 ? (actualDistance / 1000).toFixed(2) + " km" : Math.round(actualDistance) + " m";
@@ -408,15 +464,16 @@
         }
       }
 
-      // 2. 目的地の更新
-      if (destinationData) {
-        const destDist = calculateDistance(currentFix.lat, currentFix.lng, destinationData.lat, destinationData.lng);
-        const destDistStr = destDist >= 10000 ? (destDist / 1000).toFixed(0) : (destDist / 1000).toFixed(1);
-        document.getElementById("dest-distance").innerText = destDistStr;
+      destinations.forEach((dest, index) => {
+        const destDist = calculateDistance(currentFix.lat, currentFix.lng, dest.lat, dest.lng);
+        const destDistStr = destDist >= 10000 ? (destDist / 1000).toFixed(0) + " km" : (destDist / 1000).toFixed(1) + " km";
+        const distEl = document.getElementById(`dest-dist-${index}`);
+        if(distEl) distEl.innerText = destDistStr;
         
-        const destBearing = calculateBearing(currentFix.lat, currentFix.lng, destinationData.lat, destinationData.lng);
-        document.getElementById("dest-arrow").style.transform = `rotate(${destBearing}deg)`;
-      }
+        const destBearing = calculateBearing(currentFix.lat, currentFix.lng, dest.lat, dest.lng);
+        const arrowEl = document.getElementById(`dest-arrow-${index}`);
+        if(arrowEl) arrowEl.style.transform = `rotate(${destBearing}deg)`;
+      });
     }
 
     function setTargetStation(newStation) {
@@ -457,10 +514,9 @@
       }
     }
 
-    /* === 目的地設定の処理 === */
+    /* === AI自動スキャン機能 === */
     const destModal = document.getElementById("dest-modal");
-    document.getElementById("set-dest-trigger").addEventListener("click", () => destModal.classList.add("active"));
-    document.getElementById("change-dest-btn").addEventListener("click", () => destModal.classList.add("active"));
+    document.getElementById("add-dest-trigger").addEventListener("click", () => destModal.classList.add("active"));
     document.getElementById("close-dest").addEventListener("click", () => destModal.classList.remove("active"));
     
     document.getElementById("dest-search-btn").addEventListener("click", async () => {
@@ -468,32 +524,34 @@
       if(!query) return;
       
       const resContainer = document.getElementById("dest-results");
-      resContainer.innerHTML = '<div style="color: #00e5ff;">検索中...</div>';
+      resContainer.innerHTML = '<div style="color: #00e5ff;">🤖 AIが主要駅と路線ネットワークを解析中...</div>';
       
       try {
         const res = await fetch(`https://express.heartrails.com/api/json?method=getStations&name=${encodeURIComponent(query)}`);
         const data = await res.json();
         
         if (data.response && data.response.station && data.response.station.length > 0) {
-          resContainer.innerHTML = "";
-          data.response.station.forEach(st => {
-            const div = document.createElement("div");
-            div.className = "result-item";
-            div.innerHTML = `${st.name} 駅 <span>${st.line} (${st.prefecture})</span>`;
-            div.onclick = () => {
-              destinationData = { name: st.name, lat: st.y, lng: st.x };
-              document.getElementById("dest-name").innerText = st.name + " 駅";
-              
-              document.getElementById("set-dest-trigger").style.display = "none";
-              document.getElementById("destination-panel").style.display = "block";
-              destModal.classList.remove("active");
-              
-              if(lastGpsFix) updateRealtimeUI(lastGpsFix);
-            };
-            resContainer.appendChild(div);
+          let stations = data.response.station;
+          
+          stations.forEach(st => st.aiScore = scoreStationImportance(st));
+          stations.sort((a, b) => b.aiScore - a.aiScore);
+
+          let addedCount = 0;
+          stations.forEach(st => {
+            if (addedCount < 3 && !destinations.some(d => d.name === st.name)) {
+              destinations.push({ name: st.name, lat: st.y, lng: st.x });
+              addedCount++;
+            }
           });
+
+          renderDestinations();
+          destModal.classList.remove("active");
+          document.getElementById("dest-input").value = "";
+          resContainer.innerHTML = '<div style="color: #666; font-size: 0.85rem;">都市名を入力してスキャンしてください。</div>';
+          
+          if(lastGpsFix) updateRealtimeUI(lastGpsFix);
         } else {
-          resContainer.innerHTML = '<div style="color: #ff5252;">見つかりませんでした。駅名を正確に入力してください。</div>';
+          resContainer.innerHTML = '<div style="color: #ff5252;">該当する駅が見つかりませんでした。都市名を変えてお試しください。</div>';
         }
       } catch(e) {
         resContainer.innerHTML = '<div style="color: #ff5252;">通信エラーが発生しました。</div>';
@@ -522,32 +580,25 @@
       } else { alert("履歴がありません"); }
     });
 
-    /* === 利用規約モーダル (localStorage対応) === */
+    /* === 利用規約モーダル === */
     const termsModal = document.getElementById("terms-modal");
     const closeTermsBtn = document.getElementById("close-terms");
     const agreeTermsBtn = document.getElementById("agree-terms-btn");
 
-    // 初回アクセス（同意していない）場合の表示
     if (!localStorage.getItem("tos_agreed")) {
       termsModal.classList.add("active");
-      closeTermsBtn.style.display = "none";  // 初回は×ボタンを隠す
-      agreeTermsBtn.style.display = "block"; // 同意ボタンを表示
+      closeTermsBtn.style.display = "none";  
+      agreeTermsBtn.style.display = "block"; 
     }
-
-    // 「同意してはじめる」ボタンを押した時の処理
     agreeTermsBtn.addEventListener("click", () => {
-      localStorage.setItem("tos_agreed", "true"); // 同意したことをブラウザに記録
+      localStorage.setItem("tos_agreed", "true"); 
       termsModal.classList.remove("active");
     });
-
-    // フッターの「利用規約」リンクから開いた場合の処理（既に同意済みの人が見る場合）
     document.getElementById("open-terms").addEventListener("click", () => {
       termsModal.classList.add("active");
-      closeTermsBtn.style.display = "block"; // ×ボタンを表示
-      agreeTermsBtn.style.display = "none";  // 同意ボタンは不要なので隠す
+      closeTermsBtn.style.display = "block"; 
+      agreeTermsBtn.style.display = "none";  
     });
-
-    // ×ボタンで閉じる
     closeTermsBtn.addEventListener("click", () => {
       termsModal.classList.remove("active");
     });

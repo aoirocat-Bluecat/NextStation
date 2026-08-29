@@ -200,7 +200,7 @@
     .btn-container {
       display: flex;
       gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .control-btn {
       flex: 1;
@@ -212,11 +212,12 @@
       font-size: 0.85rem;
       font-weight: bold;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, color 0.2s;
     }
     .control-btn.skip { color: #ff5252; border-color: #ff5252; }
+    .control-btn.toggle { color: #ffeb3b; border-color: #ffeb3b; }
+    .control-btn.toggle.stopped { color: #00e5ff; border-color: #00e5ff; background: #003344; }
     .control-btn:active { background: #444; }
-    .control-btn.skip:active { background: #ff5252; color: #fff; }
 
     .debug-info { font-size: 0.75rem; color: #666; margin-top: 10px; }
     .credit { margin-top: 12px; font-size: 0.7rem; color: #555; }
@@ -310,6 +311,10 @@
     </div>
 
     <div class="btn-container">
+      <button id="toggle-tracking-btn" class="control-btn toggle">⏸ 追跡を停止</button>
+    </div>
+
+    <div class="btn-container">
       <button id="back-btn" class="control-btn">⬅️ 前の駅へ戻る</button>
       <button id="skip-btn" class="control-btn skip">駅をスキップ ⏭</button>
     </div>
@@ -361,6 +366,10 @@
     const API_URL = "https://express.heartrails.com/api/json?method=getStations";
     const EARTH_RADIUS = 6371e3; 
     const PREDICT_SECONDS = 45;  
+
+    let watchId = null;          // GPS監視用ID
+    let isTracking = false;      // 追跡中フラグ
+    let stationaryStartTime = null; // 停車開始時間
 
     let lastGpsFix = null;       
     let lastApiCallPin = null;   
@@ -507,6 +516,45 @@
       }
     }
 
+    /* === 追跡 ON/OFF 制御機能 === */
+    const toggleBtn = document.getElementById("toggle-tracking-btn");
+
+    function startTracking() {
+      if ("geolocation" in navigator && !isTracking) {
+        watchId = navigator.geolocation.watchPosition(
+          handlePositionSuccess, 
+          () => document.getElementById("station").innerText = "位置情報エラー",
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+        isTracking = true;
+        toggleBtn.innerText = "⏸ 追跡を停止";
+        toggleBtn.classList.remove("stopped");
+        document.getElementById("status").innerText = "測位中...";
+        document.getElementById("status").style.color = "#ff9800";
+      }
+    }
+
+    function stopTracking() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      isTracking = false;
+      toggleBtn.innerText = "▶ 追跡を開始";
+      toggleBtn.classList.add("stopped");
+      document.getElementById("status").innerText = "追跡停止中";
+      document.getElementById("status").style.color = "#888";
+      document.getElementById("compass-text").innerText = "追跡停止中";
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      if (isTracking) {
+        stopTracking();
+      } else {
+        startTracking();
+      }
+    });
+
     /* === 駅検索 ＆ 選択モーダル機能 === */
     const destModal = document.getElementById("dest-modal");
     document.getElementById("add-dest-trigger").addEventListener("click", () => destModal.classList.add("active"));
@@ -627,7 +675,7 @@
       window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
     }
 
-    /* === GPS監視 === */
+    /* === GPS監視のコールバック === */
     function handlePositionSuccess(position) {
       const currentFix = { lat: position.coords.latitude, lng: position.coords.longitude, timestamp: position.timestamp || Date.now() };
 
@@ -642,12 +690,19 @@
       const distanceMoved = calculateDistance(lastGpsFix.lat, lastGpsFix.lng, currentFix.lat, currentFix.lng);
 
       if (distanceMoved < 10) {
-        if (timeElapsed > 5) { currentSpeed = 0; document.getElementById("compass-text").innerText = "停車中"; }
+        if (!stationaryStartTime) stationaryStartTime = currentFix.timestamp;
+        const stoppedDuration = (currentFix.timestamp - stationaryStartTime) / 1000;
+
+        if (stoppedDuration >= 3) {
+          currentSpeed = 0;
+          document.getElementById("compass-text").innerText = "停車中";
+        }
         lastGpsFix = currentFix;
         updateRealtimeUI(currentFix);
         return; 
       }
 
+      stationaryStartTime = null;
       currentSpeed = distanceMoved / timeElapsed;
       currentBearing = calculateBearing(lastGpsFix.lat, lastGpsFix.lng, currentFix.lat, currentFix.lng);
 
@@ -674,12 +729,8 @@
       }
     }
 
-    if ("geolocation" in navigator) {
-      navigator.geolocation.watchPosition(handlePositionSuccess, 
-        () => document.getElementById("station").innerText = "位置情報エラー",
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-      );
-    }
+    // 初回自動追跡スタート
+    startTracking();
   </script>
 </body>
 </html>

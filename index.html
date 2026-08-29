@@ -329,10 +329,10 @@
         <button id="close-dest" class="close-btn">✕</button>
       </div>
       <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 12px; line-height: 1.4;">
-        目的地や向かっている駅名（例：銭函、小樽築港、札幌）を入力してください。候補から選択して追加できます。
+        目的地や向かっている駅名を入力してください。候補から選択して追加できます。
       </div>
       <div class="search-input-group">
-        <input type="text" id="dest-input" placeholder="例: 銭函、小樽築港、札幌">
+        <input type="text" id="dest-input" placeholder="駅名を入力">
         <button id="dest-search-btn">検索</button>
       </div>
       <div id="dest-results" class="result-list">
@@ -454,7 +454,6 @@
         const distEl = document.getElementById(`dest-dist-${index}`);
         if(distEl) distEl.innerText = destDistStr;
         
-        // 残り時間（分）の計算（移動中なら現在速度、停車中なら時速50km換算で算出）
         const calcSpeed = currentSpeed > 1.38 ? currentSpeed : (50 * 1000 / 3600);
         const remainMinutes = Math.ceil(destDist / calcSpeed / 60);
         const timeEl = document.getElementById(`dest-time-${index}`);
@@ -528,7 +527,6 @@
           const stations = data.response.station;
           resContainer.innerHTML = '';
           
-          // 重複の除去
           const uniqueStations = [];
           const seen = new Set();
           for (const st of stations) {
@@ -539,13 +537,11 @@
             }
           }
 
-          // 候補リストを生成して表示
           uniqueStations.forEach(st => {
             const item = document.createElement("div");
             item.className = "result-item";
             item.innerHTML = `<strong>${st.name} 駅</strong><span>${st.line} (${st.prefecture})</span>`;
             
-            // 候補タップで目的地・経由駅に追加
             item.addEventListener("click", () => {
               if (!destinations.some(d => d.name === st.name && d.line === st.line)) {
                 destinations.push({ name: st.name, line: st.line, lat: st.y, lng: st.x });
